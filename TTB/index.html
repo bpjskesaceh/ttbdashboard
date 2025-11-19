@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Status Berkas BPJS</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+
+  <style>
+    :root {
+      --primary: #7f5af0;
+      --secondary: #2cb67d;
+      --bg-gradient: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
+      --text-light: #777;
+      --card-bg: #fff;
+      --shadow: 0 10px 25px rgba(0,0,0,0.08);
+      --radius: 18px;
+    }
+
+    body {
+      font-family: "Poppins","Segoe UI",sans-serif;
+      background: var(--bg-gradient);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .navbar {
+      background: rgba(255,255,255,0.4);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid rgba(255,255,255,0.3);
+    }
+
+    .bpjs-logo { height:55px; object-fit:contain; }
+
+    .clock {
+      font-size:0.9rem; font-weight:500; color:#444;
+      position:absolute; top:10px; right:20px;
+    }
+
+    .main-container {
+      flex:1; display:flex; justify-content:center;
+      align-items:flex-start; padding:40px 15px;
+    }
+
+    .dashboard-card {
+      width:100%; max-width:1100px;
+      background:var(--card-bg);
+      border-radius:var(--radius);
+      box-shadow:var(--shadow);
+      padding:30px;
+      animation:fadeIn .6s ease;
+    }
+
+    @keyframes fadeIn { from{opacity:0;transform:translateY(10px);} to{opacity:1;transform:translateY(0);} }
+
+    h5.title {
+      font-weight:700; color:var(--primary);
+      margin-bottom:24px; text-align:center;
+    }
+
+    .status-badge {
+      border-radius:20px; padding:5px 12px;
+      font-size:.85rem; font-weight:600;
+      display:inline-block;
+      white-space:nowrap;
+    }
+    .status-menunggu{ background:#fff3cd; color:#8a6d3b; }
+    .status-antrian{ background:#d1e7ff; color:#084298; }
+    .status-selesai{ background:#d1fae5; color:#065f46; }
+
+    table thead th { font-weight:700 !important; }
+
+    /* 🔥 Tambahan supaya header & data TIDAK turun ke baris kedua */
+    table thead th,
+    table td {
+      white-space: nowrap !important;
+    }
+  </style>
+</head>
+
+<body>
+
+  <nav class="navbar px-4 py-2 position-relative shadow-sm">
+    <div class="navbar-brand w-100 text-center">
+      <img src="./logo-bpjs.png" class="bpjs-logo">
+    </div>
+    <span class="clock" id="clock"></span>
+  </nav>
+
+  <div class="main-container">
+    <div class="dashboard-card">
+      <h5 class="title">Pantauan Status Berkas BPJS Kesehatan</h5>
+
+      <div class="d-flex mb-2 justify-content-end align-items-center gap-2 flex-wrap">
+        <button class="btn btn-primary" id="todayBtn">📅 Data Hari Ini</button>
+        <button class="btn btn-success" id="refreshBtn">🔄 Muat Ulang</button>
+      </div>
+
+      <div id="updateInfo" class="text-end text-muted small"></div>
+
+      <div class="table-responsive mt-3">
+        <table class="table align-middle text-center">
+          <thead>
+            <tr>
+              <th>No</th>
+              <th>Nama</th>
+              <th>Status</th>
+              <th>Kode Pendaftaran</th>
+            </tr>
+          </thead>
+
+          <tbody id="dataTable">
+            <tr><td colspan="10" class="text-center text-muted">Memuat data...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+    </div>
+  </div>
+
+  <footer class="text-center mb-3">© 2025 BPJS Kesehatan | Mudah • Cepat • Setara</footer>
+
+  <script>
+    const API_URL = "https://script.google.com/macros/s/AKfycbxldHwAxHOLJvZHh3iQMuyIgNwI3YIrdVN8GmA2og4WfAH6CDJrPsyy0fKll4n9FCG24g/exec";
+
+    let showAll=false;
+    let countdown = 30;
+
+    function updateClock(){
+      const now=new Date();
+      document.getElementById("clock").textContent =
+        now.toLocaleDateString("id-ID",{weekday:"short"}) + ", " +
+        now.toLocaleDateString("id-ID",{day:"2-digit",month:"short",year:"numeric"}) +
+        " • " +
+        now.toLocaleTimeString("id-ID",{hour12:false});
+    }
+    setInterval(updateClock,1000);
+    updateClock();
+
+    async function loadData(){
+      const table=document.getElementById("dataTable");
+      const info=document.getElementById("updateInfo");
+
+      table.innerHTML=`<tr><td colspan="10" class="text-center text-muted">Memuat data...</td></tr>`;
+
+      try{
+        const raw = await (await fetch(API_URL)).text();
+        const data = JSON.parse(raw);
+
+        let filtered = data;
+
+        if(!showAll){
+          const today = new Date().toISOString().split("T")[0];
+          filtered = data.filter(r => (r["Timestamp"]||"").split("T")[0] === today);
+        }
+
+        renderTable(filtered);
+
+        const now = new Date().toLocaleTimeString("id-ID",{hour12:false});
+        info.textContent = `Diperbarui: ${now} • Memuat ulang otomatis dalam ${countdown} detik`;
+
+      }catch(e){
+        table.innerHTML=`<tr><td colspan="10" class="text-danger">Gagal memuat data.</td></tr>`;
+      }
+    }
+
+    function renderTable(data){
+      const table=document.getElementById("dataTable");
+      table.innerHTML="";
+
+      if(!data.length){
+        table.innerHTML=`<tr><td colspan="10" class="text-center text-muted">Tidak ada data.</td></tr>`;
+        return;
+      }
+
+      data.forEach((item,i)=>{
+        const status=item["Status"]||"";
+
+        let cls="";
+        if(status==="Menunggu") cls="status-menunggu";
+        else if(status==="Tiket dalam antrian") cls="status-antrian";
+        else if(status==="Selesai") cls="status-selesai";
+
+        table.innerHTML+=`
+          <tr>
+            <td>${i+1}</td>
+            <td>${item["Nama"]||"-"}</td>
+            <td><span class="status-badge ${cls}">${status}</span></td>
+            <td>${item["Kode Pendaftaran"]||"-"}</td>
+          </tr>
+        `;
+      });
+    }
+
+    // AUTO REFRESH
+    setInterval(() => {
+      countdown--;
+      const info = document.getElementById("updateInfo");
+      const nowClock = new Date().toLocaleTimeString("id-ID",{hour12:false});
+
+      info.textContent = `Diperbarui: ${nowClock} • Memuat ulang otomatis dalam ${countdown} detik`;
+
+      if(countdown === 0){
+        countdown = 30;
+        loadData();
+      }
+    }, 1000);
+
+    document.getElementById("todayBtn").onclick = () => {
+      showAll = false;
+      loadData();
+    };
+
+    document.getElementById("allBtn").onclick = () => {
+      showAll = true;
+      loadData();
+    };
+
+    document.getElementById("refreshBtn").onclick=()=>{
+      countdown = 30;
+      loadData();
+    };
+
+    loadData();
+  </script>
+
+</body>
+</html>
